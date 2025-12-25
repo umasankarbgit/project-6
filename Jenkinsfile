@@ -30,7 +30,7 @@ pipeline {
                     docker build -t $FULL_IMAGE .
                 '''
             }
-        }
+       }
 
         stage('Login to Docker Hub') {
             steps {
@@ -42,13 +42,18 @@ pipeline {
         }
 
         stage('Push Image to Docker Hub') {
-            steps {
-                sh '''
-                    echo "Pushing image to Docker Hub..."
-                    docker push $FULL_IMAGE
-                '''
-            }
+    steps {
+        sh '''
+            echo "Pushing image to Docker Hub..."
+            docker push $FULL_IMAGE
+        '''
+    }
+    post {
+        always {
+            sh 'docker logout'
         }
+    }
+}
 
         stage('Update Kubeconfig') {
             steps {
@@ -85,8 +90,5 @@ pipeline {
         failure {
             echo "❌ Pipeline failed. Please check logs."
         }
-        always {
-            sh 'docker logout'
-        }
-    }
+            }
 }
