@@ -5,7 +5,7 @@ pipeline {
         AWS_REGION = "ap-south-1"
         EKS_CLUSTER_NAME = "test-eks"
 
-        // Jenkins credentials
+        // DockerHub credentials (already correct)
         DOCKERHUB_CREDS = credentials('dockerhub-creds')
 
         // Image details
@@ -30,7 +30,7 @@ pipeline {
                     docker build -t $FULL_IMAGE .
                 '''
             }
-       }
+        }
 
         stage('Login to Docker Hub') {
             steps {
@@ -42,39 +42,48 @@ pipeline {
         }
 
         stage('Push Image to Docker Hub') {
-    steps {
-        sh '''
-            echo "Pushing image to Docker Hub..."
-            docker push $FULL_IMAGE
-        '''
-    }
-    
-}
+            steps {
+                sh '''
+                    echo "Pushing image to Docker Hub..."
+                    docker push $FULL_IMAGE
+                '''
+            }
+        }
 
         stage('Update Kubeconfig') {
             steps {
-                sh '''
-                    echo "Updating kubeconfig..."
-                    aws eks update-kubeconfig \
-                        --region $AWS_REGION \
-                        --name $EKS_CLUSTER_NAME
-                '''
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-creds'
+                ]]) {
+                    sh '''
+                        echo "Updating kubeconfig..."
+                        aws eks update-kubeconfig \
+                            --region $AWS_REGION \
+                            --name $EKS_CLUSTER_NAME
+                    '''
+                }
             }
         }
 
         stage('Deploy to EKS') {
             steps {
-                sh '''
-                    echo "Updating image in deployment YAML..."
-                    sed -i "s|image:.*|image: $FULL_IMAGE|g" K8s/deployment.yaml
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-creds'
+                ]]) {
+                    sh '''
+                        echo "Updating image in deployment YAML..."
+                        sed -i "s|image:.*|image: $FULL_IMAGE|g" K8s/deployment.yaml
 
-                    echo "Deploying to EKS..."
-                    kubectl apply -f K8s/deployment.yaml
-                    kubectl apply -f K8s/service.yaml
+                        echo "Deploying to EKS..."
+                        kubectl apply -f K8s/deployment.yaml
+                        kubectl apply -f K8s/service.yaml
 
-                    echo "Checking rollout status..."
-                    kubectl rollout status deployment/dockerhub-sample-app
-                '''
+                        echo "Checking rollout status..."
+                        kubectl rollout status deployment/dockerhub-sample-app
+                    '''
+                }
             }
         }
     }
@@ -86,5 +95,5 @@ pipeline {
         failure {
             echo "❌ Pipeline failed. Please check logs."
         }
-            }
+    }
 }
