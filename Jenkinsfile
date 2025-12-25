@@ -48,11 +48,7 @@ pipeline {
             docker push $FULL_IMAGE
         '''
     }
-    post {
-        always {
-            sh 'docker logout'
-        }
-    }
+    
 }
 
         stage('Update Kubeconfig') {
