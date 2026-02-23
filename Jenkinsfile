@@ -5,7 +5,7 @@ pipeline {
         AWS_REGION = "ap-south-1"
         EKS_CLUSTER_NAME = "test-eks"
 
-        // DockerHub credentials (already correct)
+        // Jenkins credentials
         DOCKERHUB_CREDS = credentials('dockerhub-creds')
 
         // Image details
@@ -52,38 +52,28 @@ pipeline {
 
         stage('Update Kubeconfig') {
             steps {
-                withCredentials([[
-                    $class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'aws-creds'
-                ]]) {
-                    sh '''
-                        echo "Updating kubeconfig..."
-                        aws eks update-kubeconfig \
-                            --region ap-south-1 \
-                            --name test-eks
-                    '''
-                }
+                sh '''
+                    echo "Updating kubeconfig..."
+                    aws eks update-kubeconfig \
+                        --region $AWS_REGION \
+                        --name $EKS_CLUSTER_NAME
+                '''
             }
         }
 
         stage('Deploy to EKS') {
             steps {
-                withCredentials([[
-                    $class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'aws-creds'
-                ]]) {
-                    sh '''
-                        echo "Updating image in deployment YAML..."
-                        sed -i "s|image:.*|image: $FULL_IMAGE|g" K8s/deployment.yaml
+                sh '''
+                    echo "Updating image in deployment YAML..."
+                    sed -i "s|image:.*|image: $FULL_IMAGE|g" K8s/deployment.yaml
 
-                        echo "Deploying to EKS..."
-                        kubectl apply -f K8s/deployment.yaml
-                        kubectl apply -f K8s/service.yaml
+                    echo "Deploying to EKS..."
+                    kubectl apply -f K8s/deployment.yaml
+                    kubectl apply -f K8s/service.yaml
 
-                        echo "Checking rollout status..."
-                        kubectl rollout status deployment/dockerhub-sample-app
-                    '''
-                }
+                    echo "Checking rollout status..."
+                    kubectl rollout status deployment/dockerhub-sample-app
+                '''
             }
         }
     }
@@ -94,6 +84,9 @@ pipeline {
         }
         failure {
             echo "❌ Pipeline failed. Please check logs."
+        }
+        always {
+            sh 'docker logout'
         }
     }
 }
