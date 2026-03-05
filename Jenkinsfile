@@ -1,4 +1,3 @@
-```groovy
 pipeline {
     agent any
 
@@ -6,7 +5,7 @@ pipeline {
         AWS_REGION = "ap-south-1"
         EKS_CLUSTER_NAME = "test-eks"
 
-        // DockerHub credentials from Jenkins
+        // DockerHub credentials (already correct)
         DOCKERHUB_CREDS = credentials('docker-creds')
 
         // Image details
@@ -36,7 +35,8 @@ pipeline {
         stage('Login to Docker Hub') {
             steps {
                 sh '''
-                    echo "$DOCKERHUB_CREDS_PSW" | docker login -u "$DOCKERHUB_CREDS_USR" --password-stdin
+                    echo "$DOCKERHUB_CREDS_PSW" | \
+                    docker login -u "$DOCKERHUB_CREDS_USR" --password-stdin
                 '''
             }
         }
@@ -57,11 +57,10 @@ pipeline {
                     credentialsId: 'aws-creds'
                 ]]) {
                     sh '''
-                        echo "Checking AWS identity..."
-                        aws sts get-caller-identity
-
                         echo "Updating kubeconfig..."
-                        aws eks update-kubeconfig --region $AWS_REGION --name $EKS_CLUSTER_NAME
+                        aws eks update-kubeconfig \
+                            --region ap-south-1 \
+                            --name test-eks
                     '''
                 }
             }
@@ -69,31 +68,32 @@ pipeline {
 
         stage('Deploy to EKS') {
             steps {
-                sh '''
-                    echo "Updating deployment image..."
-                    sed -i "s|image:.*|image: $FULL_IMAGE|g" K8s/deployment.yaml
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-creds'
+                ]]) {
+                    sh '''
+                        echo "Updating image in deployment YAML..."
+                        sed -i "s|image:.*|image: $FULL_IMAGE|g" K8s/deployment.yaml
 
-                    echo "Deploying to EKS..."
-                    kubectl apply -f K8s/deployment.yaml
-                    kubectl apply -f K8s/service.yaml
+                        echo "Deploying to EKS..."
+                        kubectl apply -f K8s/deployment.yaml
+                        kubectl apply -f K8s/service.yaml
 
-                    echo "Checking rollout status..."
-                    kubectl rollout status deployment/dockerhub-sample-app
-                '''
+                        echo "Checking rollout status..."
+                        kubectl rollout status deployment/dockerhub-sample-app
+                    '''
+                }
             }
         }
     }
 
     post {
         success {
-            echo "CI/CD pipeline completed successfully. App deployed to EKS!"
+            echo "✅ CI/CD pipeline completed successfully. App deployed to EKS!"
         }
         failure {
-            echo "Pipeline failed. Please check logs."
-        }
-        always {
-            sh 'docker logout || true'
+            echo "❌ Pipeline failed. Please check logs."
         }
     }
 }
-```
