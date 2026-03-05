@@ -91,10 +91,14 @@ pipeline {
     }
 
     post {
-        always {
-            node {
-            sh 'docker logout'
-            }
-        }
+    success {
+        echo "CI/CD pipeline completed successfully. App deployed to EKS!"
     }
+    failure {
+        echo "Pipeline failed. Please check logs."
+    }
+    always {
+        sh 'docker logout'
+    }
+}
 }
