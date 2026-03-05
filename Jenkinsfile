@@ -1,3 +1,4 @@
+```groovy
 pipeline {
     agent any
 
@@ -5,14 +6,8 @@ pipeline {
         AWS_REGION = "ap-south-1"
         EKS_CLUSTER_NAME = "test-eks"
 
-        // Jenkins credentials
+        // DockerHub credentials from Jenkins
         DOCKERHUB_CREDS = credentials('docker-creds')
-
-        // AWS credentials
-        AWS_CREDS = credentials('aws-creds')
-
-        AWS_ACCESS_KEY_ID     = "${AWS_CREDS_USR}"
-        AWS_SECRET_ACCESS_KEY = "${AWS_CREDS_PSW}"
 
         // Image details
         IMAGE_NAME = "${DOCKERHUB_CREDS_USR}/myapp"
@@ -55,22 +50,20 @@ pipeline {
             }
         }
 
-        stage('Configure AWS CLI') {
-            steps {
-                sh '''
-                    aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
-                    aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
-                    aws configure set region $AWS_REGION
-                '''
-            }
-        }
-
         stage('Update Kubeconfig') {
             steps {
-                sh '''
-                    echo "Updating kubeconfig..."
-                    aws eks update-kubeconfig --region ap-south-1 --name test-eks
-                '''
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-creds'
+                ]]) {
+                    sh '''
+                        echo "Checking AWS identity..."
+                        aws sts get-caller-identity
+
+                        echo "Updating kubeconfig..."
+                        aws eks update-kubeconfig --region $AWS_REGION --name $EKS_CLUSTER_NAME
+                    '''
+                }
             }
         }
 
@@ -103,3 +96,4 @@ pipeline {
         }
     }
 }
+```
