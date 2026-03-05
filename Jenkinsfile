@@ -3,10 +3,10 @@ pipeline {
 
     environment {
         AWS_REGION = "ap-south-1"
-        EKS_CLUSTER_NAME = "managed-eks-cluster"
+        EKS_CLUSTER_NAME = "test-eks"
 
         // Jenkins credentials
-        DOCKERHUB_CREDS = credentials('dockerhub-creds')
+        DOCKERHUB_CREDS = credentials('docker-creds')
 
         // AWS credentials
         AWS_CREDS = credentials('aws-creds')
@@ -41,8 +41,7 @@ pipeline {
         stage('Login to Docker Hub') {
             steps {
                 sh '''
-                    echo "$DOCKERHUB_CREDS_PSW" | \
-                    docker login -u "$DOCKERHUB_CREDS_USR" --password-stdin
+                    echo "$DOCKERHUB_CREDS_PSW" | docker login -u "$DOCKERHUB_CREDS_USR" --password-stdin
                 '''
             }
         }
@@ -50,7 +49,7 @@ pipeline {
         stage('Push Image to Docker Hub') {
             steps {
                 sh '''
-                    echo "Pushing image..."
+                    echo "Pushing image to Docker Hub..."
                     docker push $FULL_IMAGE
                 '''
             }
@@ -69,9 +68,8 @@ pipeline {
         stage('Update Kubeconfig') {
             steps {
                 sh '''
-                    aws eks update-kubeconfig \
-                    --region $AWS_REGION \
-                    --name $EKS_CLUSTER_NAME
+                    echo "Updating kubeconfig..."
+                    aws eks update-kubeconfig --region $AWS_REGION --name $EKS_CLUSTER_NAME
                 '''
             }
         }
@@ -79,11 +77,14 @@ pipeline {
         stage('Deploy to EKS') {
             steps {
                 sh '''
+                    echo "Updating deployment image..."
                     sed -i "s|image:.*|image: $FULL_IMAGE|g" K8s/deployment.yaml
 
+                    echo "Deploying to EKS..."
                     kubectl apply -f K8s/deployment.yaml
                     kubectl apply -f K8s/service.yaml
 
+                    echo "Checking rollout status..."
                     kubectl rollout status deployment/dockerhub-sample-app
                 '''
             }
@@ -91,14 +92,14 @@ pipeline {
     }
 
     post {
-    success {
-        echo "CI/CD pipeline completed successfully. App deployed to EKS!"
+        success {
+            echo "CI/CD pipeline completed successfully. App deployed to EKS!"
+        }
+        failure {
+            echo "Pipeline failed. Please check logs."
+        }
+        always {
+            sh 'docker logout || true'
+        }
     }
-    failure {
-        echo "Pipeline failed. Please check logs."
-    }
-    always {
-        sh 'docker logout'
-    }
-}
 }
