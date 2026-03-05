@@ -69,7 +69,7 @@ pipeline {
             steps {
                 sh '''
                     echo "Updating kubeconfig..."
-                    aws eks update-kubeconfig --region $AWS_REGION --name $EKS_CLUSTER_NAME
+                    aws eks update-kubeconfig --region ap-south-1 --name test-eks
                 '''
             }
         }
